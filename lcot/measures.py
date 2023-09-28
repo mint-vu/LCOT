@@ -24,7 +24,7 @@ class measure():
   def cdf(self,x):
     # cumulative distribution funcion for x in [0,1]
     cdf_x = self.density_x
-    cdf_y = np.cumsum(self.density_y)/self.density_len
+    cdf_y = np.cumsum(self.density_y)
     return np.interp(x,cdf_x,cdf_y)
 
   def ecdf(self,x):
@@ -44,7 +44,7 @@ class measure():
 
   def expected_value(self):
     # expected value
-    return np.mean(self.density_x*self.density_y)
+    return np.sum(self.density_x*self.density_y)
 
   def sample(self,sample_size):
     number_different_values = 10000
@@ -53,6 +53,7 @@ class measure():
     extended_samples_pdf = extended_samples_pdf/np.cumsum(extended_samples_pdf)[-1]
     #return np.random.choice(self.density_x, size=sample_size, p=self.density_y/self.density_len)
     return np.random.choice(extended_samples, size=sample_size, p=extended_samples_pdf)
+
 
 
 class target_measure(measure):
@@ -65,22 +66,6 @@ class target_measure(measure):
   def alpha(self):
     # returns alpha as in 'Transportation distances on the circle and applications' - Rabin et al. for quadratic transport cost
     return self.expected_value() - 0.5
-
-  def get_cut(self):
-    max_it = 50
-    t = 0.5
-    alpha = self.alpha()
-    TOL = 1e-9
-    for i in range(max_it):
-      old_t = t
-      t = t-(t-self.cdf(t)-alpha)/(1-self.pdf(t))
-      if abs(t-old_t) < TOL:
-        break
-    return t
-
-  def old_embedding(self,x):
-    x_min = self.get_cut()
-    return self.itcdf(x-x_min,x_min) - (x-x_min)
 
   def embedding(self,x):
     alpha = self.alpha()
@@ -114,69 +99,6 @@ class empirical_measure():
 
   def alpha(self):
     return np.mean(self.samples) - 0.5
-
-  def get_cut(self, max_it=100, tol=1e-5):
-    target = self.sorted_samples
-    a = 0
-    b = len(target)-1
-
-    while self._obj_func(a) * self._obj_func(b) > 0:
-      b -= 1
-
-    for i in range(max_it):
-      c = math.floor((a+b)/2)
-      if self._obj_func(a)*self._obj_func(c) < 0:
-        b = c
-      elif self._obj_func(c)*self._obj_func(b) < 0:
-        a = c
-      if b-a <= 1:
-        break
-
-    y1 = self._obj_func(a)
-    y2 = self._obj_func(b)
-    try:
-      slope = (y1-y2)/(target[a]-target[b])
-      constant_term = y1-slope*target[a]
-      out = - constant_term/slope
-    except:
-      out = (target[a]+target[b])/2
-    return out
-
-  def _obj_func(self, index):
-    alpha = self.alpha()
-    target,target_cdf = self.empirical_cdf()
-    return target[index]-target_cdf[index]-alpha
-
-  def embedding(self,x):
-    x_cut = self.get_cut()%1
-    #print(x_cut)
-    target = self.sorted_samples
-    num_samples = len(target)
-
-    first_element = bisect.bisect_left(target, x_cut)  #first index in "target" that is greater than x_cut
-
-    aux1 = target[first_element:]
-    aux2 = target[:first_element]
-
-    embedding = np.concatenate((aux1,aux2), axis=None)
-
-    out = []
-    for i in x:
-      value = embedding[int(((i-x_cut)%1)//(1/(num_samples-1)))] -i
-      if value <= 0.5:
-        out.append(value)
-      else:
-        out.append(value-1)
-
-    out2 = []
-    for i in x:
-      value = embedding[int(((i-x_cut)%1)//(1/(num_samples-1)))]
-      if value <= 1:
-        out2.append(value)
-      else:
-        out2.append(value-1)
-
-    return np.array(out)
 
 
 def ot_1d(u_values, v_values):

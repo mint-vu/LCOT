@@ -8,7 +8,6 @@ def vonmises_kde(data, kappa, n_bins=100):
     kde = np.exp(kappa*np.cos(bins[:, None]-data[None, :])).sum(1)/(2*np.pi*i0(kappa))
     kde /= np.trapz(kde, x=bins)
     return bins, kde
-
 class LCOT():
   def __init__(self,x=None):
     if x is None:
@@ -16,7 +15,8 @@ class LCOT():
     else:
       self.x = x
     self.N = len(self.x)
-    self.reference = measure([self.x,np.ones_like(self.x)])
+    self.dx = 1./self.N
+    self.reference = measure([self.x,np.ones_like(self.x)/self.N])
     self.samples = np.linspace(0,1,5000)
 
   def forward(self,measure):
@@ -32,18 +32,35 @@ class LCOT():
       ysamples[ysamples>1]-=1
       ysamples[ysamples<0]+=1
       _,pde = vonmises_kde(2*np.pi*(ysamples-.5),kappa=kappa,n_bins=len(self.x))
+      pde /= pde.sum()
       return measure([self.x,pde])
 
   def inverse(self,embedding):
       monge = embedding+self.x
-      xtemp = np.linspace(monge.min(),monge.max(),self.N)
-      imonge = np.interp(xtemp,monge,self.x)
-      imonge_prime = np.gradient(imonge,xtemp[1]-xtemp[0],edge_order=2)
-      if monge.min()<0:
-        ind= -np.argwhere(self.x>-monge.min())[0][0]
-      else:
-        ind= np.argwhere(self.x>monge.min())[0][0]
-      return measure([self.x,np.roll(imonge_prime,ind)])
+      monge_max = monge.max()
+      monge_min = monge.min()      
+      if monge_min<0 and monge_max>1:      
+        xtemp = np.linspace(monge_min,monge_max,int((monge_max-monge_min)*self.N))
+        imonge = np.interp(xtemp,monge,self.x)
+        imonge_prime = np.gradient(imonge,xtemp[1]-xtemp[0],edge_order=2)    
+        ind0 = np.argmin(abs(xtemp))
+        ind1 = np.argmin(abs(xtemp-1))                  
+        imonge_prime[ind1-ind0:ind1]+=imonge_prime[:ind0]
+        imonge_prime[ind0:ind0+len(xtemp)-ind1]+=imonge_prime[ind1:] 
+        pdf = imonge_prime[ind0:ind1+1]
+      elif monge_min<0:      
+        xtemp = np.linspace(monge_min,monge_max,self.N)
+        imonge = np.interp(xtemp,monge,self.x)
+        imonge_prime = np.gradient(imonge,xtemp[1]-xtemp[0],edge_order=2)    
+        ind0 = np.argmin(abs(xtemp))                
+        pdf = np.roll(imonge_prime,-ind0)
+      elif monge_max>1:
+        xtemp = np.linspace(monge_min,monge_max,self.N)
+        imonge = np.interp(xtemp,monge,self.x)
+        imonge_prime = np.gradient(imonge,xtemp[1]-xtemp[0],edge_order=2)    
+        ind1 = np.argmin(abs(xtemp-1)) 
+        pdf = np.roll(imonge_prime,self.N-ind1)
+      return measure([self.x,pdf])
 
   def cost(self,nu1,nu2):
        nu1_hat = self.forward(nu1)
