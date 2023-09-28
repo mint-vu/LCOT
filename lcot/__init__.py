@@ -23,12 +23,12 @@ class LCOT():
       mean = measure.expected_value()
       alpha = mean-.5
       xnew=np.linspace(-1,2,3*self.N)
-      embedd = np.interp(self.x,measure.ecdf(xnew)-alpha,xnew)-self.x
+      embedd = np.interp(self.x-alpha,measure.ecdf(xnew),xnew)-self.x
       return embedd
 
   def inverse_kde(self,embedding,kappa=50.):
       monge = embedding+self.x
-      ysamples = interp(self.samples,self.x,monge)
+      ysamples = np.interp(self.samples,self.x,monge)
       ysamples[ysamples>1]-=1
       ysamples[ysamples<0]+=1
       _,pde = vonmises_kde(2*np.pi*(ysamples-.5),kappa=kappa,n_bins=len(self.x))
@@ -37,14 +37,15 @@ class LCOT():
   def inverse(self,embedding):
       monge = embedding+self.x
       xtemp = np.linspace(monge.min(),monge.max(),self.N)
-      imonge = interp(xtemp,monge,self.x)
+      imonge = np.interp(xtemp,monge,self.x)
       imonge_prime = np.gradient(imonge,xtemp[1]-xtemp[0],edge_order=2)
       if monge.min()<0:
         ind= -np.argwhere(self.x>-monge.min())[0][0]
       else:
         ind= np.argwhere(self.x>monge.min())[0][0]
       return measure([self.x,np.roll(imonge_prime,ind)])
+
   def cost(self,nu1,nu2):
        nu1_hat = self.forward(nu1)
        nu2_hat = self.forward(nu2)
-       return (np.minimum(abs(nu2_hat-nu1_hat),1-abs(nu2_hat-nu1_hat))**2).sum()
+       return np.sqrt((np.minimum(abs(nu2_hat-nu1_hat),1-abs(nu2_hat-nu1_hat))**2).sum())
